@@ -3,6 +3,9 @@
 import numpy as np
 import tensorflow as tf
 
+from dgps_with_iwvi.models import DGP_VI
+
+
 class SGHMC(object):
     def __init__(self, model, vars, hyper_train_op, window_size):
         self.model = model
@@ -78,3 +81,19 @@ class SGHMC(object):
         i = np.random.randint(len(self.window))
         feed_dict.update(self.window[i])
         session.run(self.hyper_train_op, feed_dict=feed_dict)
+
+
+class DGP_SGHCM(DGP_VI):
+    def __init__(self, *args, **kwargs):
+        DGP_VI.__init__(self, *args, **kwargs)
+        for layer in self.layers:
+            if hasattr(layer, 'q_sqrt'):
+                del layer.q_sqrt
+                layer.q_sqrt = None
+                layer.q_mu.set_trainable(False)
+
+    def predict_y_samples(self, Xnew, S):
+
+        spacing = 5
+        posterior_samples = sghmc_optimizer.collect_samples(sess, num, spacing)
+        return posterior_samples

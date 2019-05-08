@@ -11,7 +11,10 @@ from gpflow.mean_functions import Identity, Linear
 from gpflow import defer_build, params_as_tensors
 from gpflow.params import Minibatch, DataHolder, Parameter, ParamList
 from gpflow import Param, autoflow
+
 from gpflow.multioutput.features import MixedKernelSharedMof
+from gpflow.multioutput.kernels import SharedMixedMok
+
 from gpflow.models import Model
 from gpflow import transforms
 from gpflow import settings
@@ -147,6 +150,7 @@ def make_dgp(ARGS, X, Y):
         op_adam = AdamOptimizer(lr).make_optimize_tensor(model)
         op_increment = tf.assign_add(global_step, 1)
         model.train_op = lambda s: s.run([op_adam, op_increment])
+        model.init_op = lambda s: s.run(tf.variables_initializer([global_step]))
         model.global_step = global_step
 
         return model
@@ -201,7 +205,6 @@ def make_dgp(ARGS, X, Y):
 
                             PP = np.zeros((D_out, num_gps))
                             PP[:, :min(num_gps, DX)] = P[:, :min(num_gps, DX)]
-                            # kern = SeparateMixedMok([make_kern() for _ in range(num_gps)], W=PP)
                             kern = SharedMixedMok(make_kern(), W=PP)
                             ZZ = np.random.randn(ARGS.M, D_in)
                             ZZ[:, :min(D_in, DX)] = Z[:, :min(D_in, DX)]
@@ -218,22 +221,19 @@ def make_dgp(ARGS, X, Y):
                     elif c == 'L':
                         d = int(d)
                         D_in += d
-                        layers.append(LatentVariableConcatLayer(d, XY_dim=DX + 1))
+                        layers.append(LatentVariableLayer(d, XY_dim=DX+1))
 
             kern = RBF(D_in, lengthscales=float(D_in)**0.5, variance=1., ARD=True)
-            # if D_in > DX:
-            #     ZZ = np.concatenate([Z, np.random.randn(ARGS.M, D_in - DX)], 1)
             ZZ = np.random.randn(ARGS.M, D_in)
             ZZ[:, :min(D_in, DX)] = Z[:, :min(D_in, DX)]
-            layers.append(GPLayer(kern, InducingPoints(ZZ), DY, mean_function=Zero()))
+            layers.append(GPLayer(kern, InducingPoints(ZZ), DY))
 
 
             #################################### model
 
             if ARGS.mode == 'VI':
-                model = DeepGP(X, Y, layers,
-                               likelihood=lik,
-                               batch_size=ARGS.minibatch_size,
+                model = DGP_VI(X, Y, layers, lik,
+                               minibatch_size=ARGS.minibatch_size,
                                name='Model')
 
             elif ARGS.mode == 'HMC':
@@ -243,34 +243,14 @@ def make_dgp(ARGS, X, Y):
                         layer.q_sqrt = None
                         layer.q_mu.set_trainable(False)
 
-                model = DeepGP(X, Y, layers,
-                                  likelihood=lik,
-                                  batch_size=ARGS.minibatch_size,
-                                  name='Model')
+                model = DGP_VI(X, Y, layers, lik,
+                               minibatch_size=ARGS.minibatch_size,
+                               name='Model')
 
-
-
-            # elif ARGS.mode == 'HMC_full':
-            #     layers_hmc = []
-            #     for layer in layers:
-            #         if hasattr(layer, 'q_sqrt'):
-            #             layer.q_sqrt = None
-            #             layer.q_mu.set_trainable(False)
-            #
-            #             layers_hmc.append(layer)
-            #
-            #         if isinstance(layer, LatentVariableLayer):
-            #             layers_hmc.append(HMCLatentVariableConcatLayer(X.shape[0], layer.latent_dim))
-            #
-            #     model = DeepGP(X, Y, layers_hmc,
-            #                    likelihood=lik,
-            #                    batch_size=None,
-            #                    name='Model')
 
             elif ARGS.mode == 'IWAE':
-                model = IWDeepGP(X, Y, layers,
-                                 likelihood=lik,
-                                 batch_size=ARGS.minibatch_size,
+                model = DGP_IWVI(X, Y, layers, lik,
+                                 minbatch_size=ARGS.minibatch_size,
                                  num_samples=ARGS.num_IW_samples,
                                  name='Model')
         model.compile()
@@ -299,12 +279,11 @@ def make_dgp(ARGS, X, Y):
 
             op_ng = NatGradOptimizer(gamma=gamma).make_optimize_tensor(model, var_list=var_list)
 
-            if hasattr(model, 'apply_gradients'):
-                adam_optimizer = tf.train.AdamOptimizer(lr)
-                op_adam = model.apply_gradients(adam_optimizer)
+            op_adam = AdamOptimizer(lr).make_optimize_tensor(model)
 
-            else:
-                op_adam = AdamOptimizer(lr).make_optimize_tensor(model)
+            model.train_op = lambda s: [s.run(op_ng), s.run(op_adam), s.run(op_increment)]
+            model.init_op = lambda s: s.run(tf.variables_initializer([global_step]))
+            model.global_step = global_step
 
         else:
             hyper_train_op = AdamOptimizer(ARGS.lr).make_optimize_tensor(model)
@@ -315,75 +294,26 @@ def make_dgp(ARGS, X, Y):
 
             sghmc_optimizer = SGHMC(model, hmc_vars, hyper_train_op, 100)
 
+            model.train_op = lambda s: [s.run(op_increment),
+                                        sghmc_optimizer.sghmc_step(s),
+                                        sghmc_optimizer.train_hypers(s)]
+            def init_op(s):
+                epsilon = 0.01
+                mdecay = 0.05
+                with tf.variable_scope('hmc'):
+                    sghmc_optimizer.generate_update_step(epsilon, mdecay)
+                v = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hmc')
+                s.run(tf.variables_initializer(v))
+                s.run(tf.variables_initializer([global_step]))
 
-
-
-        ################################################ tensorboard
-
-        import gpflow.training.monitor as mon
-
-        print_freq = 1000
-        saving_freq = 500
-        tensorboard_freq = 500
-        # full_lml_freq = 1000
-
-        print_task = mon.PrintTimingsTask() \
-            .with_name('print') \
-            .with_condition(mon.PeriodicIterationCondition(print_freq))
-
-        saver = tf.train.Saver(max_to_keep=1, save_relative_paths=True)
-        checkpoint_task = mon.CheckpointTask(checkpoint_dir=checkpoint_path, saver=saver) \
-            .with_name('checkpoint') \
-            .with_condition(mon.PeriodicIterationCondition(saving_freq)) \
-            .with_exit_condition(True)
-
-        writer = mon.LogdirWriter(tensorboard_path)
-        tensorboard_task = mon.ModelToTensorBoardTask(writer, model) \
-            .with_name('tensorboard') \
-            .with_condition(mon.PeriodicIterationCondition(tensorboard_freq)) \
-            # .with_exit_condition(True)
-
-        monitor_tasks = [print_task, tensorboard_task, checkpoint_task]
-
+            model.init_op = init_op
+            model.global_step = global_step
 
         ################################################ training loop
         def optimize():
             sess = model.enquire_session()
 
-            sess.run(tf.variables_initializer([global_step]))
 
-            if hasattr(model, 'apply_gradients'):
-                sess.run(tf.variables_initializer(adam_optimizer.variables()))
-
-
-            with mon.Monitor(monitor_tasks, sess, global_step, print_summary=True) as monitor:
-                try:
-                    mon.restore_session(sess, checkpoint_path)
-                except ValueError:
-                    pass
-
-                iterations_to_go = max([ARGS.iterations - sess.run(global_step), 0])
-                print('Already run {} iterations. Running {} iterations'.format(sess.run(global_step), iterations_to_go))
-
-                if 'HMC' in ARGS.mode:
-                    epsilon = 0.01
-                    mdecay = 0.05
-                    with tf.variable_scope('hmc'):
-                        sghmc_optimizer.generate_update_step(epsilon, mdecay)
-                    v = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hmc')
-                    sess.run(tf.variables_initializer(v))
-
-                    if iterations_to_go > 0:
-                        for it in range(iterations_to_go):
-                            sess.run(op_increment)
-                            monitor()
-                            sghmc_optimizer.sghmc_step(sess)
-                            sghmc_optimizer.train_hypers(sess)
-
-                    num = KDE_ARGS.num_samples # ARGS.num_predict_samples
-                    spacing = 5#0
-                    posterior_samples = sghmc_optimizer.collect_samples(sess, num, spacing)
-                    return posterior_samples
 
                 else:
                     if iterations_to_go > 0:

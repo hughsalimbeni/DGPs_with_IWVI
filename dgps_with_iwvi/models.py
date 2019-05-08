@@ -91,6 +91,15 @@ class DGP_VI(gpflow.models.GPModel):
         _, means, covs, _, _ = self.propagate(X_tiled)
         return means[-1], covs[-1]
 
+    @gpflow.params_as_tensors
+    @gpflow.autoflow((gpflow.settings.float_type, [None, None]), (gpflow.settings.int_type, ()))
+    def predict_y_samples(self, X, S):
+        X_tiled = tf.tile(X[None, :, :], [S, 1, 1])
+        _, means, covs, _, _ = self.propagate(X_tiled)
+        z = tf.random_normal(tf.shape(means[-1]), dtype=gpflow.settings.float_type)
+        return means[-1] + z * covs[-1]**0.5
+
+
 
 
 
