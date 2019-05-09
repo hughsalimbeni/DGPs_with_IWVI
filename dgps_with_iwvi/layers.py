@@ -15,7 +15,7 @@ class GPLayer(gpflow.Parameterized):
     def __init__(self, kern, Z, num_outputs, mean_function=None, name=None):
         gpflow.Parameterized.__init__(self, name=name)
 
-        self.num_inducing = Z.shape[0]
+        self.num_inducing = len(Z)
 
         q_mu = np.zeros((self.num_inducing, num_outputs))
         self.q_mu = gpflow.params.Parameter(q_mu)
@@ -24,7 +24,7 @@ class GPLayer(gpflow.Parameterized):
         transform = gpflow.transforms.LowerTriangular(self.num_inducing, num_matrices=num_outputs)
         self.q_sqrt = gpflow.params.Parameter(q_sqrt, transform=transform)
 
-        self.feature = gpflow.features.InducingPoints(Z)
+        self.feature = Z if isinstance(Z, gpflow.features.InducingFeature) else gpflow.features.InducingPoints(Z)
         self.kern = kern
         self.mean_function = mean_function or gpflow.mean_functions.Zero()
 
