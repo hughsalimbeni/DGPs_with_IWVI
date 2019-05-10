@@ -143,7 +143,7 @@ class CVAE(Model):
 
 
 
-def build_model(ARGS, X, Y):
+def build_model(ARGS, X, Y, apply_name=True):
 
     if ARGS.mode == 'CVAE':
 
@@ -155,7 +155,8 @@ def build_model(ARGS, X, Y):
                 pass
 
         with defer_build():
-            model = CVAE(X, Y, 1, layers, batch_size=ARGS.minibatch_size, name='cvae')
+            name = 'CVAE' if apply_name else None
+            model = CVAE(X, Y, 1, layers, batch_size=ARGS.minibatch_size, name=name)
 
         model.compile()
 
@@ -241,11 +242,12 @@ def build_model(ARGS, X, Y):
 
 
             #################################### model
+            name = 'Model' if apply_name else None
 
             if ARGS.mode == 'VI':
                 model = DGP_VI(X, Y, layers, lik,
                                minibatch_size=ARGS.minibatch_size,
-                               name='Model')
+                               name=name)
 
             elif ARGS.mode == 'SGHMC':
                 for layer in layers:
@@ -256,14 +258,14 @@ def build_model(ARGS, X, Y):
 
                 model = DGP_VI(X, Y, layers, lik,
                                minibatch_size=ARGS.minibatch_size,
-                               name='Model')
+                               name=name)
 
 
             elif ARGS.mode == 'IWAE':
                 model = DGP_IWVI(X, Y, layers, lik,
                                  minibatch_size=ARGS.minibatch_size,
                                  num_samples=ARGS.num_IW_samples,
-                                 name='Model')
+                                 name=name)
 
 
 
