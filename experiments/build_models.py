@@ -13,16 +13,17 @@ from gpflow.params import Minibatch, DataHolder, Parameter, ParamList
 from gpflow import Param, autoflow
 
 from gpflow.multioutput.features import MixedKernelSharedMof
-from gpflow.multioutput.kernels import SharedMixedMok
+# from gpflow.multioutput.kernels import SharedMixedMok
 
 from gpflow.models import Model
 from gpflow import transforms
 from gpflow import settings
 
 from dgps_with_iwvi.layers import GPLayer, LatentVariableLayer
+from dgps_with_iwvi.temp_workaround import SharedMixedMok
 from dgps_with_iwvi.models import DGP_VI, DGP_IWVI
 
-# from sghmc import SGHMC
+from sghmc import SGHMC
 
 
 class CVAE(Model):
@@ -168,7 +169,7 @@ def build_model(ARGS, X, Y):
         model.init_op = lambda s: s.run(tf.variables_initializer([global_step]))
         model.global_step = global_step
 
-        return model
+        model.compile()
 
     else:
         N, D = X.shape
@@ -199,37 +200,34 @@ def build_model(ARGS, X, Y):
             if len(ARGS.configuration) > 0:
                 for c, d in ARGS.configuration.split('_'):
                     if c == 'G':
-                        if d == 'X':
-                            kern = RBF(D_in, lengthscales=float(D_in) ** 0.5, variance=1., ARD=True)
-                            l = GPLayer(kern, InducingPoints(Z), D_in, mean_function=Identity())
-                            layers.append(l)
-                        else:
-                            num_gps = int(d)
-                            A = np.zeros((D_in, D_out))
-                            D_min = min(D_in, D_out)
-                            A[:D_min, :D_min] = np.eye(D_min)
-                            mf = Linear(A=A)
-                            mf.b.set_trainable(False)
+                        num_gps = int(d)
+                        A = np.zeros((D_in, D_out))
+                        D_min = min(D_in, D_out)
+                        A[:D_min, :D_min] = np.eye(D_min)
+                        mf = Linear(A=A)
+                        mf.b.set_trainable(False)
 
-                            def make_kern():
-                                k = RBF(D_in, lengthscales=float(D_in) ** 0.5, variance=1., ARD=True)
-                                k.variance.set_trainable(False)
-                                return k
+                        def make_kern():
+                            k = RBF(D_in, lengthscales=float(D_in) ** 0.5, variance=1., ARD=True)
+                            k.variance.set_trainable(False)
+                            return k
 
-                            PP = np.zeros((D_out, num_gps))
-                            PP[:, :min(num_gps, DX)] = P[:, :min(num_gps, DX)]
-                            kern = SharedMixedMok(make_kern(), W=PP)
-                            ZZ = np.random.randn(ARGS.M, D_in)
-                            ZZ[:, :min(D_in, DX)] = Z[:, :min(D_in, DX)]
-                            inducing = MixedKernelSharedMof(InducingPoints(ZZ))
-                            l = GPLayer(kern, inducing, num_gps, mean_function=mf)
-                            if ARGS.fix_linear is True:
-                                kern.W.set_trainable(False)
-                                mf.set_trainable(False)
+                        PP = np.zeros((D_out, num_gps))
+                        PP[:, :min(num_gps, DX)] = P[:, :min(num_gps, DX)]
+                        ZZ = np.random.randn(ARGS.M, D_in)
+                        ZZ[:, :min(D_in, DX)] = Z[:, :min(D_in, DX)]
 
-                            layers.append(l)
+                        kern = SharedMixedMok(make_kern(), W=PP)
+                        inducing = MixedKernelSharedMof(InducingPoints(ZZ))
 
-                            D_in = D_out
+                        l = GPLayer(kern, inducing, num_gps, mean_function=mf)
+                        if ARGS.fix_linear is True:
+                            kern.W.set_trainable(False)
+                            mf.set_trainable(False)
+
+                        layers.append(l)
+
+                        D_in = D_out
 
                     elif c == 'L':
                         d = int(d)
@@ -249,7 +247,7 @@ def build_model(ARGS, X, Y):
                                minibatch_size=ARGS.minibatch_size,
                                name='Model')
 
-            elif ARGS.mode == 'HMC':
+            elif ARGS.mode == 'SGHMC':
                 for layer in layers:
                     if hasattr(layer, 'q_sqrt'):
                         del layer.q_sqrt
@@ -263,21 +261,21 @@ def build_model(ARGS, X, Y):
 
             elif ARGS.mode == 'IWAE':
                 model = DGP_IWVI(X, Y, layers, lik,
-                                 minbatch_size=ARGS.minibatch_size,
+                                 minibatch_size=ARGS.minibatch_size,
                                  num_samples=ARGS.num_IW_samples,
                                  name='Model')
-        model.compile()
 
 
 
         global_step = tf.Variable(0, dtype=tf.int32)
         op_increment = tf.assign_add(global_step, 1)
 
-        if not ('HMC' in ARGS.mode):
+        if not ('SGHMC' == ARGS.mode):
             for layer in model.layers[:-1]:
                 if isinstance(layer, GPLayer):
                     layer.q_sqrt = layer.q_sqrt.read_value() * 1e-5
 
+            model.compile()
 
             #################################### optimization
 
@@ -294,36 +292,44 @@ def build_model(ARGS, X, Y):
 
             op_adam = AdamOptimizer(lr).make_optimize_tensor(model)
 
-            model.train_op = lambda s: [s.run(op_ng), s.run(op_adam), s.run(op_increment)]
+            def train(s):
+                s.run(op_increment)
+                s.run(op_ng)
+                s.run(op_adam)
+
+            model.train_op = train
             model.init_op = lambda s: s.run(tf.variables_initializer([global_step]))
             model.global_step = global_step
 
         else:
+            model.compile()
 
-            assert False
-            # hyper_train_op = AdamOptimizer(ARGS.lr).make_optimize_tensor(model)
-            # hmc_vars = []
-            # for layer in layers:
-            #     if hasattr(layer, 'q_mu'):
-            #         hmc_vars.append(layer.q_mu.unconstrained_tensor)
-            #
-            # sghmc_optimizer = SGHMC(model, hmc_vars, hyper_train_op, 100)
-            #
-            # model.train_op = lambda s: [s.run(op_increment),
-            #                             sghmc_optimizer.sghmc_step(s),
-            #                             sghmc_optimizer.train_hypers(s)]
-            # def init_op(s):
-            #     epsilon = 0.01
-            #     mdecay = 0.05
-            #     with tf.variable_scope('hmc'):
-            #         sghmc_optimizer.generate_update_step(epsilon, mdecay)
-            #     v = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hmc')
-            #     s.run(tf.variables_initializer(v))
-            #     s.run(tf.variables_initializer([global_step]))
-            #
-            # model.init_op = init_op
-            # model.global_step = global_step
+            hmc_vars = []
+            for layer in layers:
+                if hasattr(layer, 'q_mu'):
+                    hmc_vars.append(layer.q_mu.unconstrained_tensor)
 
-        ################################################ training loop
+            hyper_train_op = AdamOptimizer(ARGS.lr).make_optimize_tensor(model)
 
-        return model
+            sghmc_optimizer = SGHMC(model, hmc_vars, hyper_train_op, 100)
+
+            def train_op(s):
+                s.run(op_increment),
+                sghmc_optimizer.sghmc_step(s),
+                sghmc_optimizer.train_hypers(s)
+
+            model.train_op = train_op
+            model.sghmc_optimizer = sghmc_optimizer
+            def init_op(s):
+                epsilon = 0.01
+                mdecay = 0.05
+                with tf.variable_scope('hmc'):
+                    sghmc_optimizer.generate_update_step(epsilon, mdecay)
+                v = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='hmc')
+                s.run(tf.variables_initializer(v))
+                s.run(tf.variables_initializer([global_step]))
+
+            model.init_op = init_op
+            model.global_step = global_step
+
+    return model

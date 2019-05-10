@@ -4,6 +4,7 @@ import numpy as np
 import gpflow
 import enum
 
+from dgps_with_iwvi.temp_workaround import multisample_sample_conditional, gauss_kl
 
 class RegularizerType(enum.Enum):
     LOCAL = 0
@@ -32,15 +33,15 @@ class GPLayer(gpflow.Parameterized):
 
     @gpflow.params_as_tensors
     def propagate(self, F, full_cov=False, **kwargs):
-        samples, mean, cov = gpflow.conditionals.sample_conditional(F,
-                                                                    self.feature,
-                                                                    self.kern,
-                                                                    self.q_mu,
-                                                                    full_cov=full_cov,
-                                                                    q_sqrt=self.q_sqrt,
-                                                                    white=True)
+        samples, mean, cov = multisample_sample_conditional(F,
+                                                            self.feature,
+                                                            self.kern,
+                                                            self.q_mu,
+                                                            full_cov=full_cov,
+                                                            q_sqrt=self.q_sqrt,
+                                                            white=True)
 
-        kl = gpflow.kullback_leiblers.gauss_kl(self.q_mu, self.q_sqrt)
+        kl = gauss_kl(self.q_mu, self.q_sqrt)
 
         mf = self.mean_function(F)
         samples += mf
@@ -149,3 +150,5 @@ class Encoder(gpflow.Parameterized):
         q_sqrt = tf.nn.softplus(log_chol_diag - 3.)  # bias it towards small vals at first
         q_mu = means
         return q_mu, q_sqrt
+
+

@@ -99,12 +99,12 @@ def make_condor_jobs(script: str, experiments: list, overwrite=False):
             f.write(t)
 
 
-# from bayesian_benchmarks.data import regression_datasets
-regression_datasets = ['wilson_3droad']
+from bayesian_benchmarks.data import regression_datasets
+# regression_datasets = ['wilson_3droad']
 
 from bayesian_benchmarks.database_utils import Database
 
-DATABASE_PATH = '/vol/sml/hrs13/final_icml_experiments/results.db'
+DATABASE_PATH = 'results/results.db'
 
 def remove_already_run_experiments(table, experiments):
     res = []
@@ -119,9 +119,9 @@ def remove_already_run_experiments(table, experiments):
     return res
 
 
-splits = 1
-iterations = 1000
-remove_done = False
+splits = 5
+iterations = 100000
+remove_done = True
 
 all_experiments = []
 
@@ -186,4 +186,4 @@ if remove_done:
     all_experiments = remove_already_run_experiments('conditional_density_estimation', all_experiments)
 
 make_local_jobs('run_conditional_density_estimation', all_experiments, overwrite=True)
-# make_condor_jobs('run_conditional_density_estimation', all_experiments, overwrite=True)
+make_condor_jobs('run_conditional_density_estimation', all_experiments, overwrite=True)

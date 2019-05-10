@@ -5,29 +5,35 @@ import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.FATAL)
 
 import gpflow
+import sys
+sys.path.append('../')
 
 from dgps_with_iwvi.layers import GPLayer
 from dgps_with_iwvi.models import DGP_VI
 
 
 def test_gp_layer():
-    N = 10
-    Dy = 2
+    N = 10001
+    M = 100
+    Dy = 1
+
+    np.random.seed(0)
 
     X = np.linspace(0, 1, N).reshape(-1, 1)
+    Z = np.linspace(0, 1, M).reshape(-1, 1)
     Xs = np.linspace(0, 1, N-1).reshape(-1, 1)
 
-    Y = np.concatenate([np.sin(10*X), np.cos(10*X)], 1)
+    Y = np.concatenate([np.sin(10*X), np.cos(10*X)], 1)[:, 0:1]
 
     kern = gpflow.kernels.Matern52(1, lengthscales=0.1)
-    mean_function = gpflow.mean_functions.Linear(A=np.random.randn(1, 2))
+    mean_function = gpflow.mean_functions.Linear(A=np.random.randn(1, Dy))
     lik = gpflow.likelihoods.Gaussian(variance=1e-1)
 
-    m_vgp = gpflow.models.SVGP(X, Y, kern, lik, Z=X,
+    m_vgp = gpflow.models.SVGP(X, Y, kern, lik, Z=Z,
                                mean_function=mean_function)
 
-    q_mu = np.random.randn(N, Dy)
-    q_sqrt = np.random.randn(Dy, N, N)
+    q_mu = np.random.randn(M, Dy)
+    q_sqrt = np.random.randn(Dy, M, M)
 
     m_vgp.q_mu = q_mu
     m_vgp.q_sqrt = q_sqrt
@@ -35,7 +41,7 @@ def test_gp_layer():
     m1, v1 = m_vgp.predict_f_full_cov(Xs)
     L1 = m_vgp.compute_log_likelihood()
 
-    m_dgp = DGP_VI(X, Y, [GPLayer(kern, X, Dy, mean_function)], lik)
+    m_dgp = DGP_VI(X, Y, [GPLayer(kern, Z, Dy, mean_function)], lik, num_samples=1)
 
     m_dgp.layers[0].q_mu = q_mu
     m_dgp.layers[0].q_sqrt = q_sqrt

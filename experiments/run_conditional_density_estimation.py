@@ -1,3 +1,6 @@
+import socket
+print(socket.gethostname())
+
 import sys, os
 sys.path.append('../')
 
@@ -29,7 +32,7 @@ parser.add_argument("--gamma", default=1e-2, nargs='?', type=float)
 parser.add_argument("--lr", default=5e-3, nargs='?', type=float)
 parser.add_argument("--fix_linear", default=True, nargs='?', type=bool)
 parser.add_argument("--num_predict_samples", default=2000, nargs='?', type=int)
-parser.add_argument("--predict_batch_size", default=100, nargs='?', type=int) ## was 10 for experiments
+parser.add_argument("--predict_batch_size", default=1000, nargs='?', type=int) ## was 10 for experiments
 
 # data
 parser.add_argument("--dataset", default='kin8nm', nargs='?', type=str)
@@ -79,11 +82,19 @@ from build_models import build_model
 model = build_model(ARGS, data.X_train, data.Y_train)
 
 
+
+
+
+#################################### init
+
+sess = model.enquire_session()
+model.init_op(sess)
+
 #################################### monitoring
 
 import gpflow.training.monitor as mon
 
-print_freq = 10
+print_freq = 1000
 saving_freq = 500
 tensorboard_freq = 500
 
@@ -107,9 +118,6 @@ monitor_tasks = [print_task, tensorboard_task, checkpoint_task]
 
 #################################### training
 
-sess = model.enquire_session()
-
-model.init_op(sess)
 
 with mon.Monitor(monitor_tasks, sess, model.global_step, print_summary=True) as monitor:
     try:
@@ -117,14 +125,15 @@ with mon.Monitor(monitor_tasks, sess, model.global_step, print_summary=True) as 
     except ValueError:
         pass
 
-        iterations_to_go = max([ARGS.iterations - sess.run(model.global_step), 0])
 
-        print('Already run {} iterations. Running {} iterations'.format(sess.run(model.global_step), iterations_to_go))
+    iterations_to_go = max([ARGS.iterations - sess.run(model.global_step), 0])
 
-        for it in range(iterations_to_go):
-            monitor()
-            model.train_op(sess)
-        model.anchor(sess)
+    print('Already run {} iterations. Running {} iterations'.format(sess.run(model.global_step), iterations_to_go))
+
+    for it in range(iterations_to_go):
+        monitor()
+        model.train_op(sess)
+    model.anchor(sess)
 
 
 #################################### evaluation
@@ -134,14 +143,62 @@ from scipy.stats import norm, shapiro
 
 res = {}
 
-Xs_batch = np.array_split(data.X_test, max(1, int(len(data.X_test)/ARGS.predict_batch_size)))
-samples_test = np.concatenate([model.predict_y_samples(x, ARGS.num_predict_samples) for x in Xs_batch], 1)
+# Xs_batch = np.array_split(data.X_test, max(1, int(len(data.X_test)/ARGS.predict_batch_size)))
+
+
+if 'SGHMC' == ARGS.mode:
+    spacing = 5
+    posterior_samples = model.sghmc_optimizer.collect_samples(sess, ARGS.num_predict_samples, spacing)
+    # samples_test = []
+    #
+    # for x in Xs_batch:
+    #     s_batch = np.empty((ARGS.num_predict_samples, len(x), 1))
+    #     for i, s in enumerate(posterior_samples):
+    #         s_batch[i] = model.predict_y_samples(x, 1, feed_dict=s)[0]
+    #     samples_test.append(s_batch)
+    # samples_test = np.concatenate(samples_test, 1)
+
+else:
+    pass
+
+    # m, v = model.predict_y(data.X_test[:1000])
+    # l = norm.logpdf(data.Y_test[:1000], m, v**0.5)
+    # print(np.average(l))
+    #
+    # samples_test = model.predict_y_samples(data.X_test[:10], 1000)
+    # print(np.average(samples_test, 0))
+    # print(np.std(samples_test, 0))
+    # print(m[:10])
+    # print(v[:10]**0.5)
+    #
+    #
+    #
+    # assert False
+
+    # samples_test = np.concatenate([model.predict_y_samples(x, ARGS.num_predict_samples) for x in Xs_batch], 1)
+
+
+
 
 logp = np.empty(len(data.X_test))
 rmse = np.empty(len(data.X_test))
 shapiro_W = np.empty(len(data.X_test))
 
-for i, (Ss, y) in enumerate(zip(np.transpose(samples_test, [1, 0, 2]), data.Y_test)):
+Xs_batch = np.array_split(data.X_test, max(1, int(len(data.X_test)/ARGS.predict_batch_size)))
+
+
+# for i, (Ss, y) in enumerate(zip(np.transpose(samples_test, [1, 0, 2]), data.Y_test)):
+for i, (x, y) in enumerate(zip(data.X_test, data.Y_test)):
+    if 'SGHMC' == ARGS.mode:
+
+        samples = np.empty((ARGS.num_predict_samples, 1, 1))
+        for j, s in enumerate(posterior_samples):
+            samples[j] = model.predict_y_samples(x.reshape(1, -1), 1, feed_dict=s)[0]
+
+    else:
+        samples = model.predict_y_samples(x.reshape(1, -1), ARGS.num_predict_samples)
+
+    Ss = samples[:, :, 0]
     bandwidth = 1.06 * np.std(Ss) * len(Ss) ** (-1. / 5)  # Silverman's (1986) rule of thumb.
     kde = KernelDensity(bandwidth=float(bandwidth))
 
@@ -155,7 +212,7 @@ res['test_shapiro_W_median'] = np.median(shapiro_W)
 res['test_rmse'] = np.average(rmse) ** 0.5
 
 res.update(ARGS.__dict__)
-
+print(res)
 
 #################################### save
 
