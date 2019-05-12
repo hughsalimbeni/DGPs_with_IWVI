@@ -39,7 +39,7 @@ parser.add_argument("--dataset", default='kin8nm', nargs='?', type=str)
 parser.add_argument("--split", default=0, nargs='?', type=int)
 parser.add_argument("--seed", default=0, nargs='?', type=int)
 
-parser.add_argument("--results_path", default='results', nargs='?', type=str)
+parser.add_argument("--results_path", default='havasi_results', nargs='?', type=str)
 
 ARGS = parser.parse_args()
 
@@ -124,7 +124,6 @@ with mon.Monitor(monitor_tasks, sess, model.global_step, print_summary=True) as 
         mon.restore_session(sess, checkpoint_path)
     except ValueError:
         pass
-
 
     iterations_to_go = max([ARGS.iterations - sess.run(model.global_step), 0])
 

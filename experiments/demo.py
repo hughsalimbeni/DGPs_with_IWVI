@@ -2,6 +2,9 @@ import numpy as np
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.FATAL)
 
+import sys
+sys.path.append('../')
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -17,9 +20,9 @@ f2 = lambda x: np.exp(-(x - 1)**2) + np.random.uniform(low=-0.1, high=0.1, size=
 
 np.random.seed(0)
 
-x1 = np.random.uniform(low=-3, high=-0.3, size=(100, 1))
-x2 = np.random.uniform(low=0, high=0.7, size=(50, 1))
-x3 = np.random.uniform(low=1, high=3, size=(100, 1))
+x1 = np.random.uniform(low=-3, high=-0.5, size=(200, 1))
+x2 = np.random.uniform(low=0, high=0.5, size=(100, 1))
+x3 = np.random.uniform(low=1, high=3, size=(200, 1))
 
 X = np.concatenate([x1, x2, x3], 0)
 ind = np.random.choice([True, False], size=X.shape)
@@ -47,7 +50,7 @@ class ARGS:
 
 class CVAE(ARGS):
     mode = 'CVAE'
-    configuration = '100_100_100'
+    configuration = '200_200'
 
 
 add_model(CVAE, 'CVAE')
@@ -76,7 +79,7 @@ for model in models:
     model.init_op(sess)
 
     L = 5
-    its = 2000
+    its = 10000
     fig, axs = plt.subplots(1, L, figsize=(6*L, 6))
 
     for k, ax in enumerate(axs):
@@ -97,7 +100,7 @@ for model in models:
 
             kde.fit(Ss.reshape(-1, 1))
             for j, level in enumerate(levels):
-                cs[i, j] = kde.score(level)
+                cs[i, j] = kde.score(np.array(level).reshape(1, 1))
 
         # ax.scatter(Xs_tiled, samples, marker='.', alpha=0.2)
 

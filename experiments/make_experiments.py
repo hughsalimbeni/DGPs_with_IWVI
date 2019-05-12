@@ -100,11 +100,10 @@ def make_condor_jobs(script: str, experiments: list, overwrite=False):
 
 
 from bayesian_benchmarks.data import regression_datasets
-# regression_datasets = ['wilson_3droad']
 
 from bayesian_benchmarks.database_utils import Database
 
-DATABASE_PATH = 'results/results.db'
+DATABASE_PATH = 'havasi_results/results.db'
 
 def remove_already_run_experiments(table, experiments):
     res = []
@@ -119,8 +118,8 @@ def remove_already_run_experiments(table, experiments):
     return res
 
 
-splits = 5
-iterations = 100000
+splits = range(5)
+iterations = 20000
 remove_done = True
 
 all_experiments = []
@@ -137,13 +136,13 @@ configurations = [
 ]
 
 combinations = []
-combinations.append({'split': range(splits)})
+combinations.append({'split' : splits})
 combinations.append({'dataset': regression_datasets})
 combinations.append({'configuration': configurations})
 combinations.append({'mode': ['CVAE']})
 combinations.append({'iterations': [iterations]})
 experiments = make_experiment_combinations(combinations)
-all_experiments += experiments
+# all_experiments += experiments
 
 
 configurations_no_L = [
@@ -153,10 +152,11 @@ configurations_no_L = [
 ]
 
 combinations = []
-combinations.append({'split': range(splits)})
+combinations.append({'split' : splits})
 combinations.append({'dataset': regression_datasets})
 combinations.append({'configuration': configurations_no_L})
-combinations.append({'mode': ['VI', 'SGHMC']})
+combinations.append({'mode': ['SGHMC']})
+# combinations.append({'mode': ['VI', 'SGHMC']})
 combinations.append({'iterations': [iterations]})
 experiments = make_experiment_combinations(combinations)
 all_experiments += experiments
@@ -171,13 +171,13 @@ configurations = [
     ]
 
 combinations = []
-combinations.append({'split': range(splits)})
+combinations.append({'split' : splits})
 combinations.append({'dataset': regression_datasets})
 combinations.append({'configuration': configurations})
 combinations.append({'mode': ['VI', 'IWAE']})
 combinations.append({'iterations': [iterations]})
 experiments = make_experiment_combinations(combinations)
-all_experiments += experiments
+# all_experiments += experiments
 
 
 ########################### Write files
