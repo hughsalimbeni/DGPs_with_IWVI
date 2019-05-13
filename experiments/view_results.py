@@ -5,7 +5,6 @@ from scipy.stats import rankdata
 from bayesian_benchmarks.database_utils import Database
 from bayesian_benchmarks.data import regression_datasets, classification_datasets
 from bayesian_benchmarks.data import _ALL_REGRESSION_DATATSETS, _ALL_CLASSIFICATION_DATATSETS
-from bayesian_benchmarks.models.get_model import all_regression_models, all_classification_models
 
 _ALL_DATASETS = {}
 _ALL_DATASETS.update(_ALL_REGRESSION_DATATSETS)
@@ -113,21 +112,12 @@ def read(datasets, models, splits, table, field, extra_text='', highlight_max=Tr
     results_mean = np.nanmean(results, -1)
     results_std_err = np.nanstd(results, -1)/float(len(splits))**0.5
 
-    # if highlight_max:
-    # max = np.max(results_mean, 1)
-    # print(max)
     argmax = np.argmax(results_mean, 1)
-    # print(argmax)
     lower_pts = [m[a]-e[a] for m, e, a in zip(results_mean, results_std_err, argmax)]
-    # print(lower_pts)
     high_pts = results_mean + results_std_err
-    # print(high_pts)
     argmaxes = [np.where(h>l)[0] for h, l in zip(high_pts, lower_pts)]
-    # print(argmaxes)
 
     rs = rank_array(np.transpose(results, [0, 2, 1]))
-    # ranks = np.transpose(rs, [0, 2, 1])  # datasets, models, splits
-    # ranks_t = np.transpose(rs, [0, 2, 1])
 
     rs_flat = rs.reshape(len(datasets) * len(splits), len(models))
     avg_ranks = np.average(rs_flat, 0)
@@ -177,12 +167,6 @@ def read(datasets, models, splits, table, field, extra_text='', highlight_max=Tr
     median = np.nanmedian(np.transpose(results - results[:, ind, :][:, None, :], [0, 2, 1]).reshape(len(datasets)*len(splits), len(models)), 0)
     median = ['{:.2f}'.format(m) for m in median]
     results_pandas = np.concatenate([results_pandas, np.array(median).reshape(1, -1)], 0)
-
-    # results_mean = np.average(results, -1)
-
-    # results_pandas = np.concatenate([results_pandas, np.array(rr).reshape(1, -1)], 0)
-
-
 
     _datasets = []
     for d in datasets:
@@ -247,7 +231,7 @@ models = [
 
 
 res_test_loglik = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_loglik')
-res_test_loglik = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_rmse')
+# res_test_loglik = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_rmse')
 res_test_shapiro_W_median = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_shapiro_W_median')
 
 
@@ -265,14 +249,3 @@ models = [
 
 
 res_test_loglik = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_loglik', '_gp_only')
-
-
-# models = [
-#     {'mode':'CVAE', 'configuration':'50_50', 'nice_name':'CVAE $50-50$', 'dir':'dgps_with_iw_final'},
-#     {'mode': 'CVAE', 'configuration': '100_100_100', 'nice_name': '$100-100-100$', 'dir':'dgps_with_iw_final'},
-#     {'mode':'IWAE', 'configuration':'L1', 'nice_name':'LG (IW)', 'dir':'dgps_with_iw_fixed_linear'},
-#     {'mode':'IWAE', 'configuration':'L1_G5', 'nice_name':'LGG (IW)', 'dir':'dgps_with_iw_fixed_linear'},
-#     {'mode':'IWAE', 'configuration':'L1_G5_G5', 'nice_name':'LGGG (IW)', 'dir':'dgps_with_iw_fixed_linear'},
-# ]
-
-

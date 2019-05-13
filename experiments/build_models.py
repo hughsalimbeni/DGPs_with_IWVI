@@ -257,7 +257,7 @@ def build_model(ARGS, X, Y, apply_name=True):
                         layer.q_mu.set_trainable(False)
 
                 model = DGP_VI(X, Y, layers, lik,
-                               minibatch_size=10000,
+                               minibatch_size=ARGS.minibatch_size,
                                name=name)
 
 
@@ -311,7 +311,7 @@ def build_model(ARGS, X, Y, apply_name=True):
                 if hasattr(layer, 'q_mu'):
                     hmc_vars.append(layer.q_mu.unconstrained_tensor)
 
-            hyper_train_op = AdamOptimizer(0.01).make_optimize_tensor(model)
+            hyper_train_op = AdamOptimizer(ARGS.lr).make_optimize_tensor(model)
 
             sghmc_optimizer = SGHMC(model, hmc_vars, hyper_train_op, 100)
 

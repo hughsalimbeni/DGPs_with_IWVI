@@ -142,7 +142,7 @@ combinations.append({'configuration': configurations})
 combinations.append({'mode': ['CVAE']})
 combinations.append({'iterations': [iterations]})
 experiments = make_experiment_combinations(combinations)
-# all_experiments += experiments
+all_experiments += experiments
 
 
 configurations_no_L = [
@@ -155,8 +155,7 @@ combinations = []
 combinations.append({'split' : splits})
 combinations.append({'dataset': regression_datasets})
 combinations.append({'configuration': configurations_no_L})
-combinations.append({'mode': ['SGHMC']})
-# combinations.append({'mode': ['VI', 'SGHMC']})
+combinations.append({'mode': ['VI', 'SGHMC']})
 combinations.append({'iterations': [iterations]})
 experiments = make_experiment_combinations(combinations)
 all_experiments += experiments
@@ -177,7 +176,7 @@ combinations.append({'configuration': configurations})
 combinations.append({'mode': ['VI', 'IWAE']})
 combinations.append({'iterations': [iterations]})
 experiments = make_experiment_combinations(combinations)
-# all_experiments += experiments
+all_experiments += experiments
 
 
 ########################### Write files
