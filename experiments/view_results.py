@@ -141,10 +141,11 @@ def read(datasets, models, splits, table, field, extra_text='', highlight_max=Tr
                 if m < 0.999:
                     res_combined.append('{:.4f}'.format(m))
                 else:
-                    res_combined.append(' ')
+                    res_combined.append(r' ')
+
 
             else:
-                if True:#m > -10:
+                if m > -1000:
                     if use_error_bars:
                         if m > -10:
                             t = '{:.2f} ({:.2f})'.format(m, e)
@@ -155,13 +156,14 @@ def read(datasets, models, splits, table, field, extra_text='', highlight_max=Tr
                             t = '{:.2f}'.format(m)
                         else:
                             t = '{:.0f}'.format(m)
+
                     if highlight_max and (j in argmaxes[i]):
                         t = r'\textbf{' + t + '}'
                     if highlight_non_gaussian and (W<0.99):
                         t = r'\textit{' + t + '}'
                     res_combined.append(t)
                 else:
-                    res_combined.append('-')
+                    res_combined.append('$-\infty$')
 
     results_pandas = np.array(res_combined).reshape(results_mean.shape)
 
@@ -212,8 +214,9 @@ def read(datasets, models, splits, table, field, extra_text='', highlight_max=Tr
 
 
     pandas.DataFrame.to_csv(res, 'results_{}_{}{}.csv'.format(table, field, extra_text))#, float_format='%.6f')
+    with pandas.option_context("max_colwidth", 1000):
+        latex = pandas.DataFrame.to_latex(res, escape=False)
 
-    latex = pandas.DataFrame.to_latex(res, escape=False)
     with open('results_{}_{}{}.tex'.format(table, field, extra_text), 'w') as f:
         f.writelines(latex)
 
@@ -245,7 +248,7 @@ models = [
 
 res_test_loglik = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_loglik')
 res_test_loglik = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_rmse')
-# res_test_shapiro_W_median = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_shapiro_W_median')
+res_test_shapiro_W_median = read(regression_datasets, models, splits, 'conditional_density_estimation', 'test_shapiro_W_median')
 
 
 models = [
