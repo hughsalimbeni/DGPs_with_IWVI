@@ -1,6 +1,6 @@
 ## Deep Gaussian Processes with Importance-Weighted Variational Inference
 
-Code for the paper
+Code for the paper:
 
 ```
 @inproceedings{salimbeni2019,
@@ -10,3 +10,5 @@ Code for the paper
   year={2019}
 }
 ```
+
+See the arXiv version [here](https://arxiv.org/abs/1905.05435)
