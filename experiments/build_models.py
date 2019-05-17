@@ -286,9 +286,9 @@ def build_model(ARGS, X, Y, apply_name=True):
             model.layers[-1].q_mu.set_trainable(False)
             model.layers[-1].q_sqrt.set_trainable(False)
 
-            gamma = tf.cast(tf.train.exponential_decay(ARGS.gamma, global_step, 1000, 0.98, staircase=True),
+            gamma = tf.cast(tf.train.exponential_decay(ARGS.gamma, global_step, 1000, ARGS.gamma_decay, staircase=True),
                             dtype=tf.float64)
-            lr = tf.cast(tf.train.exponential_decay(ARGS.lr, global_step, 1000, 0.98, staircase=True), dtype=tf.float64)
+            lr = tf.cast(tf.train.exponential_decay(ARGS.lr, global_step, 1000, ARGS.lr_decay, staircase=True), dtype=tf.float64)
 
             op_ng = NatGradOptimizer(gamma=gamma).make_optimize_tensor(model, var_list=var_list)
 
