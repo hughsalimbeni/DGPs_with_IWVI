@@ -134,8 +134,8 @@ for model in models:
         plt.savefig(os.path.join(path, '{:03d}.png'.format(k)))
         plt.close()
 
-
-    os.system("convert -quality 100 -delay 20 {}/*.png {}/outvideo.mpeg".format(path, path))
+    s = "ffmpeg -r 10 -i {}/%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p {}/video_{}.mp4"
+    os.system(s.format(path, path, model.model_name))
 
 
 
