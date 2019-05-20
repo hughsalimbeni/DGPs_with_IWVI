@@ -22,9 +22,9 @@ f2 = lambda x: np.exp(-(x - 1)**2) + np.random.uniform(low=-0.1, high=0.1, size=
 
 np.random.seed(0)
 
-x1 = np.random.uniform(low=-3, high=-0.5, size=(100, 1))
+x1 = np.random.uniform(low=-3, high=-0.5, size=(300, 1))
 # x2 = np.random.uniform(low=0, high=0.5, size=(, 1))
-x3 = np.random.uniform(low=1, high=3, size=(100, 1))
+x3 = np.random.uniform(low=1, high=3, size=(300, 1))
 
 X = np.concatenate([x1, x3], 0)
 ind = np.random.choice([True, False], size=X.shape, p=(0.6, 0.4))
@@ -35,7 +35,7 @@ Y[np.invert(ind)] = f2(X[np.invert(ind)])
 fig, ax = plt.subplots(1, 1, figsize=(6, 6))
 ax.scatter(X, Y, marker='x')
 ax.set_ylim(-1, 2)
-plt.savefig('figs/data.png')
+plt.savefig('figs/more_data.png')
 plt.close()
 
 from build_models import build_model
@@ -89,7 +89,7 @@ for model in models:
     sess = model.enquire_session()
     model.init_op(sess)
 
-    L = 50
+    L = 100
     its = 5000
     # fig, axs = plt.subplots(1, L, figsize=(6*L, 6))
 
@@ -131,11 +131,11 @@ for model in models:
         path = os.path.join('figs', model.model_name)
         if not os.path.isdir(path):
             os.mkdir(path)
-        plt.savefig(os.path.join(path, '{:03d}.png'.format(k)))
+        plt.savefig(os.path.join(path, 'more_{:03d}.png'.format(k)))
         plt.close()
 
 
-    os.system("convert -quality 100 -delay 20 {}/*.png {}/outvideo.mpeg".format(path, path))
+    #os.system("convert -quality 100 -delay 10 {}/*.png {}/outvideo.mpeg".format(path, path))
 
 
 
